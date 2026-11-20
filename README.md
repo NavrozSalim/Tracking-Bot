@@ -23,30 +23,50 @@ Nothing is bought or changed on Amazon: the bot only opens order and tracking pa
 * A number typed with **Replace** (or **Add**) is kept: the bot never changes an order that has a number you
   entered. The old number stays in the order's history.
 
-## Set up on the laptop
+## Set up on the PC
 
-The Tracking Bot uses the Order bot on the same laptop: its Chrome profiles (the Amazon account is signed in
-there) and its `agent.json` (server, token and VPN). Install the Order bot first.
-
-**VPN:** like the Order bot, the agent connects the same SoftEther VPN account with the same public IP
-(`vpn_account` / `vpn_ip` from the Order bot's `agent.json`: AU-OLD, 103.100.38.134) when it starts, and
-connects it again before a job if it dropped. A job never opens Amazon from another IP; it is stopped instead.
-If the Order bot agent already connected it, nothing changes.
+The Tracking Bot is stand-alone: the PC needs no Order bot. It needs Python with Playwright and openpyxl,
+Google Chrome, and SoftEther VPN Client with the **AU-OLD** connection (same as the Order bot laptop).
 
 ```powershell
-cd C:\
 git clone https://github.com/NavrozSalim/Tracking-Bot.git C:\TrackingBot
 cd C:\TrackingBot
+pip install -r requirements.txt
 copy tracking.example.json tracking.json
+notepad tracking.json
+```
+
+In `tracking.json` set:
+
+* `server`: the web app address (the same `server` as in the Order bot's `agent.json`).
+* `token`: a web-app ingest token with the **order-bot** scope (the Order bot's token works, or make a new one).
+* `vpn_account` / `vpn_ip`: AU-OLD and 103.100.38.134, the same as the Order bot (already filled in).
+* `profiles` (optional): use another Chrome folder for an account, e.g.
+  `{"Amazon AU": {"user_data_dir": "C:\\Chrome\\Amazon", "profile_directory": "Default"}}`.
+
+Sign in to the Amazon purchase account once. The name is the purchase account's name on the store's Auto
+Purchasing step; the profile is `C:\TrackingBot\chrome-profiles\<name>`:
+
+```powershell
+.\open_profile.bat "Amazon AU"
+```
+
+Sign in to Amazon only, tick "Keep me signed in", close the window. Then start the agent and keep its window
+open:
+
+```powershell
 .\run_tracking.bat
 ```
 
-`tracking.json`: `order_bot_dir` is the Order bot folder (default `C:\OrderBot`), `poll_seconds` how often it
-asks for a job.
+**Order IDs come from the system:** each job carries the purchased orders and their Amazon order ID
+(`503-…`) saved when the Order bot bought them; the Tracking Bot only opens those orders.
 
-Keep the **Tracking Bot agent** window open next to the **Order bot agent** window. Both can run at the same
-time: the web app never gives the Tracking Bot a job while the Order bot is using the same purchase account's
-Chrome profile (Chrome allows one window per profile), and the other way round.
+**VPN:** when it starts, the agent connects the SoftEther VPN account (AU-OLD) and waits for its public IP
+(103.100.38.134), like the Order bot. Before a job it checks the IP and connects again if it dropped; a job
+never opens Amazon from another IP, it is stopped instead.
+
+The web app does not give the Tracking Bot a job on a purchase account while the Order bot is buying on it (and
+the other way round), so the account is never used by both at once.
 
 ## The window
 
@@ -60,8 +80,8 @@ tracking 9f1…: Kogan-TFS / Amazon AU (GET TRACKING)
 ==== tracking 9f1… FINISHED (exit code 0: finished) ====
 ```
 
-Exit codes: 0 finished, 1 stopped (Amazon asks to sign in: open the profile with the Order bot's
-`open_profile.py` and sign in), 2 file refused, 3 Chrome did not start, 4 unexpected error.
+Exit codes: 0 finished, 1 stopped (Amazon asks to sign in: run `open_profile.bat "Amazon AU"` and sign in; or
+the VPN is off), 2 file refused, 3 Chrome did not start, 4 unexpected error.
 
 ## Tests
 

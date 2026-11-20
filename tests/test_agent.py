@@ -74,15 +74,14 @@ class Proc:
         return 0
 
 
+CFG = {"server": "https://app.example.net", "token": "tok", "poll_seconds": 1, "progress_seconds": 20,
+       "python": "python", "vpn_account": "AU-OLD", "vpn_ip": "103.100.38.134", "vpncmd": "", "profiles": {}}
+
+
 def make(tmp_path, monkeypatch, http, vpn=None):
-    monkeypatch.setenv("ORDERBOT_SERVER", "https://app.example")
-    monkeypatch.setenv("ORDERBOT_TOKEN", "tok")
     monkeypatch.setattr(tracking_agent, "ROOT", tmp_path)
-    agent = tracking_agent.build_agent({"order_bot_dir": "", "poll_seconds": 1}, http=http, sleep=lambda s: None,
-                                       popen=Proc, vpn=vpn or Vpn())
-    agent.root = tmp_path
-    agent.log_dir = tmp_path / "logs"
-    return agent
+    return tracking_agent.TrackingAgent(dict(CFG), http=http, sleep=lambda s: None, popen=Proc, root=tmp_path,
+                                        vpn=vpn or Vpn())
 
 
 def test_takes_only_tracking_jobs(tmp_path, monkeypatch):
@@ -98,7 +97,7 @@ def test_runs_track_and_sends_the_results(tmp_path, monkeypatch, capsys):
     job = agent.next_job()
     assert agent.run_one(job) == 0
     cmd = Proc.last.cmd
-    assert cmd[1].endswith("track.py") and "--order-bot-dir" in cmd and cmd[cmd.index("--account") + 1] == "Amazon AU"
+    assert cmd[1].endswith("track.py") and "--config" in cmd and cmd[cmd.index("--account") + 1] == "Amazon AU"
     assert Proc.last.env["PYTHONUNBUFFERED"] == "1"
     url, data, files = http.posts[-1]
     assert url.endswith("/c/") and data["exit_code"] == 0 and "FOUND TB1" in data["stdout"]
@@ -111,9 +110,19 @@ def test_runs_track_and_sends_the_results(tmp_path, monkeypatch, capsys):
     assert list((tmp_path / "logs").glob("agent-*.log"))
 
 
-def test_example_config_is_valid_json():
-    cfg = json.loads((Path(__file__).resolve().parent.parent / "tracking.example.json").read_text())
-    assert cfg["order_bot_dir"] == "C:\\OrderBot"
+def test_example_config_is_valid_json_and_must_be_filled_in(tmp_path):
+    example = Path(__file__).resolve().parent.parent / "tracking.example.json"
+    cfg = json.loads(example.read_text())
+    assert (cfg["vpn_account"], cfg["vpn_ip"]) == ("AU-OLD", "103.100.38.134")
+    try:
+        tracking_agent.load_config(example)
+    except SystemExit as e:
+        assert "Set server and token" in str(e)
+    else:
+        raise AssertionError("the example server must be refused")
+    (tmp_path / "tracking.json").write_text(json.dumps({**cfg, "server": "https://app.example.net/", "token": "t"}))
+    got = tracking_agent.load_config(tmp_path / "tracking.json")
+    assert got["server"] == "https://app.example.net" and got["poll_seconds"] == 10
 
 
 def test_connects_the_order_bots_vpn_at_start(tmp_path, monkeypatch, capsys):
@@ -143,11 +152,18 @@ def test_job_stopped_when_the_vpn_cannot_connect(tmp_path, monkeypatch):
     assert Proc.last is None  # the bot never started
 
 
-def test_same_vpn_name_and_ip_as_the_order_bot(tmp_path, monkeypatch):
-    monkeypatch.setenv("ORDERBOT_SERVER", "https://app.example")
-    monkeypatch.setenv("ORDERBOT_TOKEN", "tok")
-    agent = tracking_agent.build_agent({"order_bot_dir": "", "poll_seconds": 1}, http=Http(), sleep=lambda s: None,
-                                       popen=Proc)
-    from core.vpn import DEFAULT_ACCOUNT, DEFAULT_IP  # the order bot's VPN settings
-    assert (agent.vpn.account, agent.vpn.ip) == (agent.cfg["vpn_account"], agent.cfg["vpn_ip"])
-    assert (DEFAULT_ACCOUNT, DEFAULT_IP) == ("AU-OLD", "103.100.38.134")
+def test_same_vpn_name_and_ip_as_the_order_bot(tmp_path):
+    from tracker.vpn import DEFAULT_ACCOUNT, DEFAULT_IP
+    agent = tracking_agent.TrackingAgent(dict(CFG), http=Http(), sleep=lambda s: None, popen=Proc, root=tmp_path)
+    assert (agent.vpn.account, agent.vpn.ip) == ("AU-OLD", "103.100.38.134") == (DEFAULT_ACCOUNT, DEFAULT_IP)
+
+
+def test_profile_is_this_pcs_own_folder(tmp_path):
+    from tracker.browser import PROFILES, load_account
+    (tmp_path / "accounts.json").write_text(json.dumps({"au": {"amazon_au": [
+        {"name": "Amazon AU", "chrome_profile": "P1", "user_data_dir": "C:/OrderBot/elsewhere", "debug_port": 9222}]}}))
+    acct = load_account(tmp_path / "accounts.json", "Amazon AU")
+    assert acct.vendor == "amazon_au" and acct.profile_dir() == PROFILES / "Amazon AU"
+    acct = load_account(tmp_path / "accounts.json", "Amazon AU",
+                        {"Amazon AU": {"user_data_dir": "D:/Chrome", "profile_directory": "Profile 1"}})
+    assert (str(acct.profile_dir()), acct.profile_directory) == (str(Path("D:/Chrome")), "Profile 1")

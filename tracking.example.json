@@ -1,4 +1,9 @@
 {
-  "order_bot_dir": "C:\\OrderBot",
-  "poll_seconds": 10
+  "server": "https://your-app.example.com",
+  "token": "",
+  "poll_seconds": 10,
+  "vpn_account": "AU-OLD",
+  "vpn_ip": "103.100.38.134",
+  "vpncmd": "",
+  "profiles": {}
 }

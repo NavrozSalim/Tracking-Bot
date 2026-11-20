@@ -12,8 +12,10 @@ import sys
 import traceback
 from pathlib import Path
 
+import json
+
 from tracker.amazon import AmazonTracker, Package, SignInNeeded
-from tracker.orderbot import use_order_bot
+from tracker.browser import AccountError, BrowserSession, BrowserStartError, load_account
 from tracker.results import OrdersFileError, ResultFile, read_orders, split_numbers
 
 log = logging.getLogger("trackingbot")
@@ -27,7 +29,7 @@ def parse_args(argv=None):
     ap.add_argument("--accounts-file", required=True)
     ap.add_argument("--account", required=True)
     ap.add_argument("--output-dir", required=True)
-    ap.add_argument("--order-bot-dir", default="")
+    ap.add_argument("--config", default="", help="tracking.json (its \"profiles\" set an account's Chrome folder)")
     return ap.parse_args(argv)
 
 
@@ -37,11 +39,10 @@ def setup_logging(out):
     handlers = [logging.StreamHandler(sys.stdout), logging.FileHandler(out / "tracking-log.txt", encoding="utf-8")]
     for h in handlers:
         h.setFormatter(fmt)
-    for name in ("trackingbot", "orderbot"):  # orderbot: the page helpers' "open ..." / "click ..." lines
-        lg = logging.getLogger(name)
-        lg.handlers[:] = handlers
-        lg.setLevel(logging.INFO)
-        lg.propagate = False
+    lg = logging.getLogger("trackingbot")
+    lg.handlers[:] = handlers
+    lg.setLevel(logging.INFO)
+    lg.propagate = False
 
 
 def _where(e):
@@ -52,13 +53,16 @@ def _where(e):
     return f"{Path(f.filename).name}:{f.lineno} in {f.name}"
 
 
-def run(args, session_factory=None, helpers=None):
-    use_order_bot(args.order_bot_dir)
-    from core.browser import BrowserSession, load_accounts
-    from core.errors import BrowserStartError
+def _profiles(config):
+    try:
+        return json.loads(Path(config).read_text(encoding="utf-8-sig")).get("profiles") or {} if config else {}
+    except Exception:
+        return {}
 
+
+def run(args, session_factory=None, helpers=None):
     if helpers is None:
-        import vendors.base as helpers
+        import tracker.page as helpers
     out = Path(args.output_dir)
     results = ResultFile(out / "tracking-done.xlsx")
     try:
@@ -67,18 +71,16 @@ def run(args, session_factory=None, helpers=None):
         log.error("REJECTED: %s", e)
         return 2
     try:
-        account = next(a for a in load_accounts(args.accounts_file) if a.name == args.account)
-    except StopIteration:
-        log.error("REJECTED: no account named %r in the accounts file", args.account)
-        return 2
-    except Exception as e:
-        log.error("REJECTED: accounts file: %s", e)
+        account = load_account(args.accounts_file, args.account, _profiles(getattr(args, "config", "")))
+    except AccountError as e:
+        log.error("REJECTED: %s", e)
         return 2
     base = VENDOR_BASE.get(account.vendor)
     if not base:
         log.error("REJECTED: the Tracking Bot does not read %s orders yet", account.vendor)
         return 2
-    log.info("TRACKING: %d order(s) on %s (%s)", len(orders), account.name, account.vendor)
+    log.info("TRACKING: %d order(s) on %s (%s), Chrome profile %s", len(orders), account.name, account.vendor,
+             account.profile_dir())
     tracker = AmazonTracker(base, helpers)
     stop_reason = ""
     try:

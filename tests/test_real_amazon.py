@@ -8,10 +8,7 @@ import pytest
 
 pw = pytest.importorskip("playwright.sync_api")
 
-from tracker.orderbot import use_order_bot  # noqa: E402
-
-use_order_bot()
-import vendors.base as base  # noqa: E402  (the order bot's page helpers)
+import tracker.page as base  # noqa: E402
 
 import track  # noqa: E402
 
@@ -116,7 +113,7 @@ def make_run(tmp_path, orders):
     (tmp_path / "accounts.json").write_text(json.dumps(
         {"au": {"amazon_au": [{"name": "Amazon AU", "chrome_profile": "Amazon AU", "debug_port": 9999}]}}))
     return SimpleNamespace(orders=str(tmp_path / "orders.xlsx"), accounts_file=str(tmp_path / "accounts.json"),
-                           account="Amazon AU", output_dir=str(tmp_path / "out"), order_bot_dir="")
+                           account="Amazon AU", output_dir=str(tmp_path / "out"), config="")
 
 
 def results(tmp_path):
@@ -160,3 +157,8 @@ def test_vendor_without_a_tracker_is_refused(tmp_path, session_factory):
     (tmp_path / "accounts.json").write_text(json.dumps(
         {"au": {"costco_au": [{"name": "Amazon AU", "chrome_profile": "C"}]}}))
     assert track.run(args, session_factory=session_factory, helpers=base) == 2
+
+
+def test_needs_no_order_bot():
+    import sys
+    assert "core" not in sys.modules and "vendors" not in sys.modules
