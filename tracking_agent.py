@@ -116,10 +116,36 @@ def make_agent_class(order_agent):
             self._complete(job, code, text, out)
             return code
 
+        def connect_vpn(self):
+            """Connect the same SoftEther account as the order bot (vpn_account / vpn_ip from its agent.json).
+            Nothing changes when it is already connected (e.g. by the order bot agent)."""
+            if self.vpn.enabled:
+                self.say(f"Connecting SoftEther VPN {self.vpn.account} (expect public IP {self.vpn.ip})...")
+            ok, msg = self.vpn.connect()
+            self.say(("  " if ok else "  WARNING: ") + msg
+                     + ("" if ok else " Tracking jobs will be stopped until it is connected."))
+            return ok
+
+        def refuse_off_vpn(self, job):
+            """Before a job: on the VPN's IP, or connect it again; stop the job when it still is not."""
+            ok, msg = self.vpn.check()
+            if ok:
+                return None
+            self.say(f"  {msg} Connecting it again before the job...")
+            if self.connect_vpn():
+                return None
+            ok, msg = self.vpn.check()
+            text = (f"{msg} No order was opened. Connect {self.vpn.account} in SoftEther VPN Client "
+                    f"(or restart the Tracking Bot agent) and press Get tracking again.")
+            self.say(f"  {text}")
+            out = self.root / "work" / job["job_id"] / "output"
+            out.mkdir(parents=True, exist_ok=True)
+            self._complete(job, 1, text, out)
+            return 1
+
         def loop(self):
             self.prune_logs()
-            ok, msg = self.vpn.check() if self.vpn.enabled else (True, "VPN check off")
-            self.say(("  " if ok else "  WARNING: ") + msg)
+            self.connect_vpn()
             self.say(f"Tracking Bot agent polling {self.cfg['server']} every {self.cfg['poll_seconds']} s "
                      f"(Ctrl+C to stop). Order bot: {self.order_bot_dir}. This window is also saved in {self.log_dir}")
             failing = False

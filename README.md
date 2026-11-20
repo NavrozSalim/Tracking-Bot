@@ -26,7 +26,12 @@ Nothing is bought or changed on Amazon: the bot only opens order and tracking pa
 ## Set up on the laptop
 
 The Tracking Bot uses the Order bot on the same laptop: its Chrome profiles (the Amazon account is signed in
-there), its `agent.json` (server and token) and its VPN check. Install the Order bot first.
+there) and its `agent.json` (server, token and VPN). Install the Order bot first.
+
+**VPN:** like the Order bot, the agent connects the same SoftEther VPN account with the same public IP
+(`vpn_account` / `vpn_ip` from the Order bot's `agent.json`: AU-OLD, 103.100.38.134) when it starts, and
+connects it again before a job if it dropped. A job never opens Amazon from another IP; it is stopped instead.
+If the Order bot agent already connected it, nothing changes.
 
 ```powershell
 cd C:\

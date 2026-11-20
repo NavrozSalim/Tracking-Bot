@@ -41,11 +41,19 @@ class Http:
 
 
 class Vpn:
-    enabled = False
-    account = "AU-OLD"
+    """on: connected now; connects: whether connect() gets it connected."""
+    account, ip = "AU-OLD", "103.100.38.134"
+
+    def __init__(self, on=True, connects=True, enabled=True):
+        self.on, self.connects, self.enabled, self.connect_calls = on, connects, enabled, 0
 
     def check(self):
-        return True, "ok"
+        return (True, "VPN AU-OLD is on") if self.on else (False, "VPN AU-OLD is not connected: IP 1.2.3.4")
+
+    def connect(self):
+        self.connect_calls += 1
+        self.on = self.on or self.connects
+        return self.check()
 
 
 class Proc:
@@ -66,12 +74,12 @@ class Proc:
         return 0
 
 
-def make(tmp_path, monkeypatch, http):
+def make(tmp_path, monkeypatch, http, vpn=None):
     monkeypatch.setenv("ORDERBOT_SERVER", "https://app.example")
     monkeypatch.setenv("ORDERBOT_TOKEN", "tok")
     monkeypatch.setattr(tracking_agent, "ROOT", tmp_path)
     agent = tracking_agent.build_agent({"order_bot_dir": "", "poll_seconds": 1}, http=http, sleep=lambda s: None,
-                                       popen=Proc, vpn=Vpn())
+                                       popen=Proc, vpn=vpn or Vpn())
     agent.root = tmp_path
     agent.log_dir = tmp_path / "logs"
     return agent
@@ -106,3 +114,40 @@ def test_runs_track_and_sends_the_results(tmp_path, monkeypatch, capsys):
 def test_example_config_is_valid_json():
     cfg = json.loads((Path(__file__).resolve().parent.parent / "tracking.example.json").read_text())
     assert cfg["order_bot_dir"] == "C:\\OrderBot"
+
+
+def test_connects_the_order_bots_vpn_at_start(tmp_path, monkeypatch, capsys):
+    vpn = Vpn(on=False)
+    agent = make(tmp_path, monkeypatch, Http(), vpn)
+    assert agent.connect_vpn() is True and vpn.connect_calls == 1
+    out = capsys.readouterr().out
+    assert "Connecting SoftEther VPN AU-OLD (expect public IP 103.100.38.134)" in out and "is on" in out
+
+
+def test_reconnects_before_a_job_when_the_vpn_dropped(tmp_path, monkeypatch):
+    vpn = Vpn(on=False)
+    http = Http()
+    agent = make(tmp_path, monkeypatch, http, vpn)
+    assert agent.run_one(agent.next_job()) == 0
+    assert vpn.connect_calls == 1 and Proc.last is not None
+
+
+def test_job_stopped_when_the_vpn_cannot_connect(tmp_path, monkeypatch):
+    Proc.last = None
+    vpn = Vpn(on=False, connects=False)
+    http = Http()
+    agent = make(tmp_path, monkeypatch, http, vpn)
+    assert agent.run_one(agent.next_job()) == 1
+    url, data, _ = http.posts[-1]
+    assert url.endswith("/c/") and data["exit_code"] == 1 and "No order was opened" in data["stdout"]
+    assert Proc.last is None  # the bot never started
+
+
+def test_same_vpn_name_and_ip_as_the_order_bot(tmp_path, monkeypatch):
+    monkeypatch.setenv("ORDERBOT_SERVER", "https://app.example")
+    monkeypatch.setenv("ORDERBOT_TOKEN", "tok")
+    agent = tracking_agent.build_agent({"order_bot_dir": "", "poll_seconds": 1}, http=Http(), sleep=lambda s: None,
+                                       popen=Proc)
+    from core.vpn import DEFAULT_ACCOUNT, DEFAULT_IP  # the order bot's VPN settings
+    assert (agent.vpn.account, agent.vpn.ip) == (agent.cfg["vpn_account"], agent.cfg["vpn_ip"])
+    assert (DEFAULT_ACCOUNT, DEFAULT_IP) == ("AU-OLD", "103.100.38.134")
