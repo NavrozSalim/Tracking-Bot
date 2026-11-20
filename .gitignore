@@ -1,0 +1,8 @@
+tracking.json
+work/
+logs/
+output/
+__pycache__/
+.pytest_cache/
+*.pyc
+*.tmp.xlsx
