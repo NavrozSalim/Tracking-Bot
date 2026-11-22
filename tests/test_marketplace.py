@@ -20,6 +20,10 @@ def test_carrier_names_and_couriers():
     assert courier_for("kogan", "Australia Post") == "AUP"
     assert courier_for("bigw", "Shipped with Australia Post") == "Australia Post"
     assert courier_for("bigw", "Amazon") == ""  # never mapped: TBA numbers are not uploaded
+    # "Amazon" on the tracking page, but an Australia Post number: picked by the number's format
+    assert courier_for("kogan", "Amazon", number="3697B306387401002010905") == "AUP"
+    assert courier_for("kogan", "Amazon", number="TBAU317439766") == ""
+    assert courier_for("kogan", "", number="ABC123") == ""
     over = {"kogan": {"Australia Post": "Australia Post eParcel"}, "bigw": {"Shipped with Mystery Co": "Other"}}
     assert courier_for("kogan", "Australia Post", over) == "Australia Post eParcel"
     assert courier_for("bigw", "Shipped with Mystery Co", over) == "Other"
@@ -285,3 +289,33 @@ def test_signed_out_portal_stops_the_uploads(tmp_path, portal_session):
     assert "sign in" in stop
     assert [r["upload_status"] for r in got] == ["failed", "failed"]
     assert MarketplaceSignIn
+
+
+def test_upload_only_job_from_the_orders_page(tmp_path, portal_session):
+    """The Upload button: the orders file carries the tracking number; Amazon is never opened."""
+    wb = openpyxl.Workbook()
+    wb.active.append(["order_ref", "invoice", "vendor", "vendor_order_number", "customer_name", "purchased_at",
+                      "tracking_number", "carrier"])
+    wb.active.append(["u1", "2QK9BJGC", "amazon_au", "503-1", "Shane vagg", "", "3697B306387401002010905", "Amazon"])
+    wb.active.append(["u2", "238YBHAG", "amazon_au", "503-2", "Sue", "", "TBAU317439766", "Amazon"])
+    wb.save(tmp_path / "orders.xlsx")
+    args = SimpleNamespace(orders=str(tmp_path / "orders.xlsx"), accounts_file=str(tmp_path / "missing.json"),
+                           account="", output_dir=str(tmp_path / "out"), config="", marketplace="kogan",
+                           store="Kogan-TFS", upload_only=True)
+
+    def no_amazon(account):
+        raise AssertionError("Amazon must not be opened")
+
+    assert track.run(args, session_factory=no_amazon, helpers=base, upload_session_factory=portal_session) == 0
+    saved = list(openpyxl.load_workbook(tmp_path / "out" / "tracking-done.xlsx").active.iter_rows(values_only=True))
+    got = [dict(zip(saved[0], r)) for r in saved[1:]]
+    assert [(r["order_ref"], r["upload_status"]) for r in got] == [("u1", "verified"), ("u2", "skipped")]
+    assert "AUP" in got[0]["upload_note"]
+
+
+def test_agent_passes_upload_only():
+    import tracking_agent
+    job = {"job_id": "j", "kind": "upload_tracking", "account": "", "marketplace": "bigw", "store_name": "P"}
+    cmd = tracking_agent.build_command("python", tmp := __import__("pathlib").Path("w"), job)
+    assert "--upload-only" in cmd and cmd[cmd.index("--marketplace") + 1] == "bigw"
+    assert "--upload-only" not in tracking_agent.build_command("python", tmp, {**job, "kind": "tracking"})

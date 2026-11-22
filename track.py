@@ -41,6 +41,8 @@ def parse_args(argv=None):
     ap.add_argument("--config", default="", help="tracking.json (its \"profiles\" set an account's Chrome folder)")
     ap.add_argument("--marketplace", default="", help="kogan / bigw: upload the tracking to this marketplace")
     ap.add_argument("--store", default="", help="store name: its Chrome profile is signed in to the marketplace")
+    ap.add_argument("--upload-only", action="store_true",
+                    help="upload the orders file's tracking_number to the marketplace (Amazon is not opened)")
     return ap.parse_args(argv)
 
 
@@ -94,7 +96,7 @@ def plan_uploads(marketplace, cfg, orders, results):
         row = choose_uploads(rows)
         mp_order = (order.get("invoice") or "").strip()
         if row is not None:
-            courier = courier_for(marketplace, row.get("carrier", ""), cfg.get("couriers"))
+            courier = courier_for(marketplace, row.get("carrier", ""), cfg.get("couriers"), row.get("tracking_number"))
             if not mp_order:
                 row["upload_status"], row["upload_note"] = "failed", f"no {label} order ID for this order"
             elif not courier:
@@ -171,6 +173,30 @@ def upload_tracking(args, cfg, orders, results, helpers, session_factory=None):
     return stop
 
 
+def run_upload_only(args, orders, results, helpers, session_factory=None):
+    """The Upload button on the Orders page: upload the tracking numbers in the orders file (``tracking_number``,
+    ``carrier`` columns) to the marketplace and check them. Amazon is not opened."""
+    marketplace = (getattr(args, "marketplace", "") or "").strip().lower()
+    for order in orders:
+        results.add(order, order.get("vendor_order_number", ""),
+                    Package(status="found", tracking_number=(order.get("tracking_number") or "").strip(),
+                            carrier=order.get("carrier", "")))
+    if marketplace not in PORTALS:
+        log.error("REJECTED: the Tracking Bot does not upload tracking to %r", marketplace or "(no marketplace)")
+        for r in results.rows:
+            r["upload_status"], r["upload_note"] = "failed", f"the bot does not upload to {marketplace or '?'}"
+        results.save()
+        return 2
+    log.info("UPLOAD ONLY: %d tracking number(s) to %s", len(orders), MARKETPLACE_LABEL[marketplace])
+    for r in results.rows:
+        if not r.get("tracking_number"):
+            r["status"], r["upload_status"], r["upload_note"] = "error", "failed", "no tracking number to upload"
+    cfg = {**_config(getattr(args, "config", "")), "upload_tracking": True}  # the button was pressed: upload
+    stop = upload_tracking(args, cfg, orders, results, helpers, session_factory)
+    results.save()
+    return 1 if stop else 0
+
+
 def run(args, session_factory=None, helpers=None, upload_session_factory=None):
     if helpers is None:
         import tracker.page as helpers
@@ -181,6 +207,8 @@ def run(args, session_factory=None, helpers=None, upload_session_factory=None):
     except OrdersFileError as e:
         log.error("REJECTED: %s", e)
         return 2
+    if getattr(args, "upload_only", False):
+        return run_upload_only(args, orders, results, helpers, upload_session_factory)
     try:
         account = load_account(args.accounts_file, args.account, _profiles(getattr(args, "config", "")))
     except AccountError as e:

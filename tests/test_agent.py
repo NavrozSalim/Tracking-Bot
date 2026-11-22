@@ -88,7 +88,7 @@ def test_takes_only_tracking_jobs(tmp_path, monkeypatch):
     http = Http({**JOB, "kind": "purchase"})
     agent = make(tmp_path, monkeypatch, http)
     assert agent.next_job() is None
-    assert http.gets[0][1] == {"kinds": "tracking"}
+    assert http.gets[0][1] == {"kinds": "tracking,upload_tracking"}
 
 
 def test_runs_track_and_sends_the_results(tmp_path, monkeypatch, capsys):

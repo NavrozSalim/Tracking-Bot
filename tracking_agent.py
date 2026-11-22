@@ -22,7 +22,9 @@ from tracker.vpn import DEFAULT_ACCOUNT, DEFAULT_IP, Vpn
 
 ROOT = Path(__file__).resolve().parent
 CONFIG = ROOT / "tracking.json"
-KINDS = "tracking"
+# tracking: read Amazon tracking (then upload it); upload_tracking: the Upload button on the Orders page.
+KINDS = "tracking,upload_tracking"
+JOB_KINDS = ("tracking", "upload_tracking")
 STDOUT_LIMIT = 20000
 LOG_DAYS = 14
 EXIT_MEANING = {
@@ -69,7 +71,8 @@ def build_command(python, workdir, job, config=CONFIG):
     return [python, str(ROOT / "track.py"), "--orders", str(workdir / "orders.xlsx"),
             "--accounts-file", str(workdir / "accounts.json"), "--account", job["account"],
             "--output-dir", str(workdir / "output"), "--config", str(config),
-            "--marketplace", str(job.get("marketplace") or ""), "--store", str(job.get("store_name") or "")]
+            "--marketplace", str(job.get("marketplace") or ""), "--store", str(job.get("store_name") or "")] + (
+        ["--upload-only"] if job.get("kind") == "upload_tracking" else [])
 
 
 class TrackingAgent:
@@ -134,6 +137,8 @@ class TrackingAgent:
         self.say("\n".join([head] + ["   " + ln for ln in lines] + ["=" * min(len(head), 100)]))
 
     def start_line(self, job):
+        if job.get("kind") == "upload_tracking":
+            return f"tracking {job['job_id']}: {job.get('store_name', '')} (UPLOAD TRACKING to {job.get('marketplace')})"
         return f"tracking {job['job_id']}: {job.get('store_name', '')} / {job['account']} (GET TRACKING)"
 
     # ---- web app ---------------------------------------------------------------------------------------
@@ -146,7 +151,7 @@ class TrackingAgent:
                           params={"kinds": KINDS}, timeout=30)
         r.raise_for_status()
         data = r.json()
-        return data if data.get("job_id") and data.get("kind") == "tracking" else None
+        return data if data.get("job_id") and data.get("kind") in JOB_KINDS else None
 
     def download(self, path, dest):
         r = self.http.get(self.url(path), headers=self.headers, timeout=120)

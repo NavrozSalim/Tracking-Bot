@@ -89,12 +89,25 @@ def carrier_name(raw):
     return ""
 
 
-def courier_for(marketplace, raw_carrier, overrides=None):
+# Australia Post article numbers are 23 letters / digits (36QT4180587301000931505, 3697B306387401002010905).
+AUSPOST_NUMBER_RE = re.compile(r"^[0-9][0-9A-Z]{22}$")
+
+
+def carrier_from_number(number):
+    """The carrier a number's format shows, for a number Amazon labels "Amazon" that is not a TBA one."""
+    return "Australia Post" if AUSPOST_NUMBER_RE.match(clean_number(number)) else ""
+
+
+def courier_for(marketplace, raw_carrier, overrides=None, number=""):
     """What to pick in the marketplace's courier list for the vendor's carrier ('' when there is no mapping).
-    tracking.json may map the vendor's text itself ("Shipped with Australia Post") or the carrier name."""
+    tracking.json may map the vendor's text itself ("Shipped with Australia Post") or the carrier name. When the
+    carrier is unknown or "Amazon" but the number is not Amazon's own (TBA), the number's format is used."""
     table = {norm(k): v for k, v in DEFAULT_COURIERS.get(marketplace, {}).items()}
     table.update({norm(k): v for k, v in ((overrides or {}).get(marketplace) or {}).items()})
-    for key in (norm(raw_carrier), norm(carrier_name(raw_carrier))):
+    keys = [norm(raw_carrier), norm(carrier_name(raw_carrier))]
+    if carrier_name(raw_carrier) in ("", "Amazon") and number and not NO_UPLOAD_RE.match(clean_number(number)):
+        keys.append(norm(carrier_from_number(number)))
+    for key in keys:
         if key and table.get(key):
             return table[key]
     return ""
