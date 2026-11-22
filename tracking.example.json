@@ -5,5 +5,11 @@
   "vpn_account": "AU-OLD",
   "vpn_ip": "103.100.38.134",
   "vpncmd": "",
-  "profiles": {}
+  "profiles": {},
+  "upload_tracking": true,
+  "upload_dry_run": false,
+  "couriers": {
+    "kogan": {"Australia Post": "AUP"},
+    "bigw": {"Australia Post": "Australia Post"}
+  }
 }

@@ -68,7 +68,8 @@ def kill_tree(proc):
 def build_command(python, workdir, job, config=CONFIG):
     return [python, str(ROOT / "track.py"), "--orders", str(workdir / "orders.xlsx"),
             "--accounts-file", str(workdir / "accounts.json"), "--account", job["account"],
-            "--output-dir", str(workdir / "output"), "--config", str(config)]
+            "--output-dir", str(workdir / "output"), "--config", str(config),
+            "--marketplace", str(job.get("marketplace") or ""), "--store", str(job.get("store_name") or "")]
 
 
 class TrackingAgent:

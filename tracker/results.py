@@ -10,7 +10,7 @@ log = logging.getLogger("trackingbot")
 
 ORDER_COLUMNS = ["order_ref", "invoice", "vendor", "vendor_order_number", "customer_name", "purchased_at"]
 RESULT_COLUMNS = ["order_ref", "invoice", "vendor_order_number", "status", "tracking_number", "carrier",
-                  "ship_name", "name_ok", "error"]
+                  "ship_name", "name_ok", "error", "upload_status", "upload_note"]
 SAVE_TRIES, SAVE_WAIT_S = 40, 0.5
 
 
