@@ -96,7 +96,9 @@ def plan_uploads(marketplace, cfg, orders, results):
         row = choose_uploads(rows)
         mp_order = (order.get("invoice") or "").strip()
         if row is not None:
-            courier = courier_for(marketplace, row.get("carrier", ""), cfg.get("couriers"), row.get("tracking_number"))
+            # The web app sends the courier the user saved for the carrier; older jobs fall back to tracking.json.
+            courier = (order.get("courier") or "").strip() or courier_for(
+                marketplace, row.get("carrier", ""), cfg.get("couriers"), row.get("tracking_number"))
             if not mp_order:
                 row["upload_status"], row["upload_note"] = "failed", f"no {label} order ID for this order"
             elif not courier:
@@ -262,13 +264,9 @@ def run(args, session_factory=None, helpers=None, upload_session_factory=None):
         return 4
     results.save()
     found = sum(1 for r in results.rows if r.get("status") == "found")
+    # Reading only: the tracking is uploaded when the user presses Upload tracking on the Orders page (an
+    # upload_tracking job, --upload-only).
     log.info("run finished: %d tracking number(s) read for %d order(s)", found, len(orders))
-    try:
-        upload_tracking(args, _config(getattr(args, "config", "")), orders, results, helpers, upload_session_factory)
-    except Exception as e:
-        log.error("UPLOAD STOPPED: unexpected error %s: %s  [%s]\n%s", type(e).__name__, e, _where(e),
-                  traceback.format_exc().rstrip())
-        results.save()
     return 1 if stop_reason else 0
 
 

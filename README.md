@@ -15,8 +15,11 @@ Nothing is bought or changed on Amazon: the bot only opens order and tracking pa
 
 ## Upload to the marketplace (Kogan, Big W)
 
-After reading the tracking, the bot uploads it to the marketplace order of a Kogan or Big W (MyDeal) store, in
-the store's own Chrome profile, and then searches the order again to check it is there. The marketplace order
+Reading the tracking never uploads it. The upload happens when you press **Upload tracking** at the top of the
+Orders page: the window shows what is ready (number and courier) and what is not and why, and **Confirm** sends
+one upload job with all of them (the **Upload** button next to a number sends just that one). The bot uploads each
+number to the marketplace order of the Kogan or Big W (MyDeal) store, in the store's own Chrome profile, and
+then searches the order again to check it is there. The marketplace order
 ID is the one from the marketplace (Kogan `2QK9BJGC`, Big W `1033075200`), never the Amazon order number.
 
 * **Big W** (portal.woolworthsmarketplus.com.au/orders): search the Order No, **Add Tracking**, type the
@@ -52,18 +55,13 @@ When an upload fails, a screenshot of the page is kept in `work\<job>\output\upl
 
 Sign in to the seller portal, tick "Remember me", close the window.
 
-**Couriers.** The carrier read on Amazon is turned into the marketplace's courier with the `couriers` table in
-`tracking.json` (built-in: Australia Post → `AUP` on Kogan, `Australia Post` on Big W, and the other common
-carriers by name). An option is matched by its text or its value. A carrier with no entry is marked `failed`
-("add it to couriers"); an entry that is not in the marketplace's list is marked `failed` with the list's
-options in the note, so the right name can be put in:
+**Couriers** are set in the web app: Upload tracking > **Couriers** (the courier to pick on Kogan / Big W for
+each carrier Amazon shows). Only carriers saved there are uploaded; the job tells the bot the courier, so
+nothing is set on this PC. An option is matched by its text or its value; a courier that is not in the
+marketplace's list is marked `failed` with the list's options in the note, so the right name can be saved.
+(`couriers` in `tracking.json` is only used for jobs that do not carry a courier.)
 
-```json
-"couriers": {"kogan": {"Australia Post": "AUP", "StarTrack": "STE"},
-             "bigw":  {"Australia Post": "Australia Post", "Couriers Please": "CouriersPlease"}}
-```
-
-**Settings** in `tracking.json`: `"upload_tracking": false` turns the uploads off; `"upload_dry_run": true`
+**Settings** in `tracking.json`: `"upload_dry_run": true`
 fills the form but presses Cancel instead of Save / Confirm Dispatch (use it for the first run).
 
 ## When it runs

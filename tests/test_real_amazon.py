@@ -162,3 +162,15 @@ def test_vendor_without_a_tracker_is_refused(tmp_path, session_factory):
 def test_needs_no_order_bot():
     import sys
     assert "core" not in sys.modules and "vendors" not in sys.modules
+
+
+def test_reading_tracking_never_uploads(tmp_path, session_factory):
+    """A tracking job only reads; uploading waits for Upload tracking on the Orders page."""
+    args = make_run(tmp_path, [["u1", "K1", "amazon_au", TWO_PACKAGES, "Elena Legkova", ""]])
+    args.marketplace, args.store = "kogan", "Kogan-TFS"
+
+    def no_portal(account):
+        raise AssertionError("the marketplace portal must not be opened by a tracking job")
+
+    assert track.run(args, session_factory=session_factory, helpers=base, upload_session_factory=no_portal) == 0
+    assert results(tmp_path)[0]["tracking_number"] == "TBAU316654872"

@@ -319,3 +319,21 @@ def test_agent_passes_upload_only():
     cmd = tracking_agent.build_command("python", tmp := __import__("pathlib").Path("w"), job)
     assert "--upload-only" in cmd and cmd[cmd.index("--marketplace") + 1] == "bigw"
     assert "--upload-only" not in tracking_agent.build_command("python", tmp, {**job, "kind": "tracking"})
+
+
+def test_upload_uses_the_courier_the_web_app_sent(tmp_path, portal_session):
+    """Upload tracking on the Orders page sends the courier the user saved; the bot picks exactly that one,
+    also for a carrier it does not know itself."""
+    wb = openpyxl.Workbook()
+    wb.active.append(["order_ref", "invoice", "vendor", "vendor_order_number", "customer_name", "purchased_at",
+                      "tracking_number", "carrier", "tracking_id", "courier"])
+    wb.active.append(["u1", "2QK9BJGC", "amazon_au", "503-1", "Shane vagg", "", "XYZ123456789", "Mystery Couriers",
+                      "t1", "AUP"])
+    wb.save(tmp_path / "orders.xlsx")
+    args = SimpleNamespace(orders=str(tmp_path / "orders.xlsx"), accounts_file=str(tmp_path / "missing.json"),
+                           account="", output_dir=str(tmp_path / "out"), config="", marketplace="kogan",
+                           store="Kogan-TFS", upload_only=True)
+    assert track.run(args, session_factory=None, helpers=base, upload_session_factory=portal_session) == 0
+    saved = list(openpyxl.load_workbook(tmp_path / "out" / "tracking-done.xlsx").active.iter_rows(values_only=True))
+    got = dict(zip(saved[0], saved[1]))
+    assert got["upload_status"] == "verified" and "AUP" in got["upload_note"]
