@@ -1,6 +1,7 @@
 """Open Chrome on one of the Tracking Bot's profiles so you can sign in once.
 
     python open_profile.py "Amazon AU"            the purchase account: sign in to Amazon
+    python open_profile.py "Costway AU" costway   the Costway purchase account: sign in to Costway
     python open_profile.py "Kogan-TFS" kogan      a Kogan store: sign in to the Kogan dispatch portal
     python open_profile.py "My BigW store" bigw   a Big W store: sign in to the Woolworths MarketPlus portal
 
@@ -18,7 +19,8 @@ from tracker.browser import Account, chrome_exe, keep_session_cookies, launch_ar
 from tracker.marketplace import BIGW_ORDERS, KOGAN_MANAGE, MARKETPLACE_LABEL
 
 ROOT = Path(__file__).resolve().parent
-SITES = {"amazon": ("https://www.amazon.com.au/", "Amazon"), "kogan": (KOGAN_MANAGE, MARKETPLACE_LABEL["kogan"]),
+SITES = {"amazon": ("https://www.amazon.com.au/", "Amazon"), "costway": ("https://au.costway.com/customer/account/login/", "Costway"),
+         "kogan": (KOGAN_MANAGE, MARKETPLACE_LABEL["kogan"]),
          "bigw": (BIGW_ORDERS, "the Woolworths MarketPlus (Big W) portal"),
          "mydeal": (BIGW_ORDERS, "the Woolworths MarketPlus (Big W) portal")}
 
@@ -40,7 +42,7 @@ def site_for(arg):
     if arg.lower().startswith("http"):
         return arg, arg
     if arg.lower() not in SITES:
-        raise SystemExit(f"Unknown site {arg!r}: use amazon, kogan or bigw.")
+        raise SystemExit(f"Unknown site {arg!r}: use amazon, costway, kogan or bigw.")
     return SITES[arg.lower()]
 
 

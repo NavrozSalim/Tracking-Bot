@@ -20,6 +20,7 @@ from pathlib import Path
 import json
 
 from tracker.amazon import AmazonTracker, Package, SignInNeeded
+from tracker.costway import CostwayTracker
 from tracker.browser import Account, AccountError, BrowserSession, BrowserStartError, load_account
 from tracker.marketplace import (MARKETPLACE_LABEL, PORTALS, MarketplaceSignIn, UploadError, choose_uploads,
                                  courier_for)
@@ -27,7 +28,8 @@ from tracker.results import OrdersFileError, ResultFile, read_orders, split_numb
 
 log = logging.getLogger("trackingbot")
 # Purchase-account vendors the Tracking Bot can read, and their site.
-VENDOR_BASE = {"amazon_au": "https://www.amazon.com.au"}
+VENDOR_BASE = {"amazon_au": "https://www.amazon.com.au", "costway_au": "https://au.costway.com"}
+TRACKERS = {"amazon_au": AmazonTracker, "costway_au": CostwayTracker}
 # The marketplace's Chrome profile when tracking.json "profiles" sets no debug_port for it (not the Amazon one).
 MARKETPLACE_PORT = 9233
 
@@ -222,7 +224,7 @@ def run(args, session_factory=None, helpers=None, upload_session_factory=None):
         return 2
     log.info("TRACKING: %d order(s) on %s (%s), Chrome profile %s", len(orders), account.name, account.vendor,
              account.profile_dir())
-    tracker = AmazonTracker(base, helpers)
+    tracker = TRACKERS[account.vendor](base, helpers)
     stop_reason = ""
     try:
         with (session_factory or BrowserSession)(account) as session:

@@ -13,6 +13,15 @@ For each purchased order (Amazon AU for now) the bot:
 
 Nothing is bought or changed on Amazon: the bot only opens order and tracking pages.
 
+**Costway AU orders** are read too: the bot opens `https://au.costway.com/shipments?orderNumber=<Costway order>` in the
+Costway purchase account's profile and reads each "Shipment #" tab: the carrier (e.g. "AustraliaPost") and the tracking
+number. No shipment yet: "not shipped", checked again next time. Sign in once (the name is the Costway purchase
+account's name on the store's Auto Purchasing step):
+
+```powershell
+.\open_profile.bat "Costway AU" costway
+```
+
 ## Upload to the marketplace (Kogan, Big W)
 
 Reading the tracking never uploads it. The upload happens when you press **Upload tracking** at the top of the
